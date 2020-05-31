@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Battleship</title>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+output {
+  display: block;
+  margin-bottom: 1em;
+  margin-left: 1em;
+}
+pre {
+  background-color: blue;
+  color: white;
+  font-family: "Courier New", monospace;
+  font-size: 40px;
+  line-height: 40px;
+  text-transform: full-width;
+}
+table {
+  border-collapse: collapse;
+  font-size: 36px;
+  line-height: 36px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+td {
+  background-color: blue;
+  border: 1px solid black;
+  color: black;
+  height: 38px;
+  width: 38px;
+}
+.hit {
+  background-color: red;
+}
+.miss {
+  background-color: yellow;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Battleship</h1>
+
+<output id="board"></output>
+<p id="score"></p>
+<button id="new">New board</button>
+
+<p>Sink all the ships by firing shots on a grid.</p>
+</main>
+
+<script>
+/*
+ * Size in pixels of each cell.
+ */
+const SCALE = 40;
+
+/*
+ * Each cell in the board is in 1 of 4 states:
+ * 0: empty
+ * 1: occupied by a ship but no shot fired at the cell
+ * 2: miss (not occupied by a ship but shot fired at the cell)
+ * 3: hit (occupied by a ship and shot fired at the cell)
+ *
+ * The state is represented by an integer.
+ * Whether a ship occupies a cell can be determined by (value % 2) == 1.
+ * Whether a shot has been fired at a cell can be determined by value > 1.
+ */
+class Board {
+  constructor(size) {
+    this.size = Math.max(1, size);
+    this.cells = new Array(this.size * this.size).fill(0);
+    this.won = false;
+  }
+  coordinatesToIndex(x, y) {
+    return x + (y * this.size);
+  }
+  get shotCount() {
+    return this.cells.filter(v => (v > 1)).length;
+  }
+
+  isHelper(x, y, value) {
+    if (x < 0) {
+      return false;
+    }
+    if (y < 0) {
+      return false;
+    }
+    if (x >= this.size) {
+      return false;
+    }
+    if (y >= this.size) {
+      return false;
+    }
+    return (this.cells[this.coordinatesToIndex(x, y)] == value);
+  }
+  isHit(x, y) {
+    return this.isHelper(x, y, 3);
+  }
+  isMiss(x, y) {
+    return this.isHelper(x, y, 2);
+  }
+  fire(x, y) {
+    if (this.won) {
+      return this;
+    }
+    if (x < 0) {
+      return this;
+    }
+    if (y < 0) {
+      return this;
+    }
+    if (x >= this.size) {
+      return this;
+    }
+    if (y >= this.size) {
+      return this;
+    }
+
+    let board = new Board(this.size),
+        index = this.coordinatesToIndex(x, y),
+        value = this.cells[index];
+    if (value > 1) {
+      // If this cell has already been fired upon, then do nothing
+      return this;
+    }
+
+    board.cells = this.cells.slice();
+    board.cells[index] = value + 2;
+
+    // Check if all ships have been sunk
+    board.won = board.cells.every(v => (v != 1))
+
+    return board;
+  }
+
+  /*
+   * Return a size x size Board with randomly placed ships.
+   *
+   * Limit the longest ship to half of size so it can fit twice.
+   * Otherwise, simply firing down the center would find the ship making the game too easy.
+   */
+  static random(size) {
+    let board = new Board(size),
+        longestShip = Math.floor(size / 2);
+    for (let length = 2; length <= longestShip; length++) {
+      let placed = false;
+      while (!placed) {
+        let horizontal = (Math.random() < 0.5),
+            x = Math.floor(Math.random() * size),
+            y = Math.floor(Math.random() * size),
+            step = 1,
+            total = 0;
+        if (horizontal) {
+          // Place the current ship horizontally
+          if ((x + length) > size) {
+            // If there is not enough room going right, then go left
+            // We know it can fit because the longest ship fits twice on the board
+            step = -1;
+          }
+          for (let i = 0; i < length; i++) {
+            total += board.cells[board.coordinatesToIndex(x + (i * step), y)];
+          }
+          if (total <= 0) {
+            // If the ship does not collide with another
+            for (let i = 0; i < length; i++) {
+              board.cells[board.coordinatesToIndex(x + (i * step), y)] = 1;
+            }
+            placed = true;
+          }
+        }
+        else {
+          // Place the current ship vertically
+          if ((y + length) > size) {
+            // If there is not enough room going down, then go up
+            // We know it can fit because the longest ship fits twice on the board
+            step = -1;
+          }
+          for (let i = 0; i < length; i++) {
+            total += board.cells[board.coordinatesToIndex(x, y + (i * step))];
+          }
+          if (total <= 0) {
+            // If the ship does not collide with another
+            for (let i = 0; i < length; i++) {
+              board.cells[board.coordinatesToIndex(x, y + (i * step))] = 1;
+            }
+            placed = true;
+          }
+        }
+      }
+    }
+    return board;
+  }
+
+  /*
+   * A short test suite to confirm the Board class works.
+   */
+  static test() {
+    let board = new Board(10);
+    console.assert(board.cells.every(v => (v == 0)),
+                   {msg: 'board.cells not initialized.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(board.shotCount == 0,
+                   {msg: 'board.shotCount is incorrect.'});
+    board.cells[11] = 1;
+    board.cells[55] = 2;
+    board.cells[99] = 3;
+    console.assert(board.coordinatesToIndex(1, 1) == 11,
+                   {msg: 'board.coordinatesToIndex() failed.'});
+    console.assert(board.coordinatesToIndex(5, 5) == 55,
+                   {msg: 'board.coordinatesToIndex() failed.'});
+    console.assert(board.coordinatesToIndex(9, 9) == 99,
+                   {msg: 'board.coordinatesToIndex() failed.'});
+    console.assert(board.shotCount == 2,
+                   {msg: 'board.shotCount is incorrect.'});
+    for (let x = -1; x <= board.size; x++) {
+      for (let y = -1; y <= board.size; y++) {
+        if ((x == 5) && (y == 5)) {
+          console.assert(!board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        else if ((x == 9) && (y == 9)) {
+          console.assert(board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(!board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        else {
+          console.assert(!board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(!board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+          if ((x == -1) || (x == board.size) || (y == -1) || (y == board.size)) {
+            console.assert(board.fire(x, y) == board,
+                           {msg: 'board.fire() failed.'});
+          }
+        }
+      }
+    }
+
+    console.assert(board.fire(5, 5) == board,
+                   {msg: 'board.fire() failed.'});
+    console.assert(board.fire(9, 9) == board,
+                   {msg: 'board.fire() failed.'});
+    console.assert(board.cells[24] == 0,
+                   {msg: 'board.fire() failed.'});
+    board = board.fire(4, 2);
+    console.assert(board.cells[24] == 2,
+                   {msg: 'board.fire() failed.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(board.shotCount == 3,
+                   {msg: 'board.shotCount is incorrect.'});
+    for (let x = -1; x <= board.size; x++) {
+      for (let y = -1; y <= board.size; y++) {
+        if (((x == 4) && (y == 2)) || ((x == 5) && (y == 5))) {
+          console.assert(!board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        else if ((x == 9) && (y == 9)) {
+          console.assert(board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(!board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        else {
+          console.assert(!board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(!board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+      }
+    }
+
+    board = board.fire(1, 1);
+    console.assert(board.cells[11] == 3,
+                   {msg: 'board.fire() failed.'});
+    console.assert(board.won,
+                   {msg: 'board unexpectedly not won.'});
+    console.assert(board.shotCount == 4,
+                   {msg: 'board.shotCount is incorrect.'});
+    for (let x = -1; x <= board.size; x++) {
+      for (let y = -1; y <= board.size; y++) {
+        if (((x == 4) && (y == 2)) || ((x == 5) && (y == 5))) {
+          console.assert(!board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        else if (((x == 1) && (y == 1)) || ((x == 9) && (y == 9))) {
+          console.assert(board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(!board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        else {
+          console.assert(!board.isHit(x, y),
+                         {msg: 'board.isHit() failed.'});
+          console.assert(!board.isMiss(x, y),
+                         {msg: 'board.isMiss() failed.'});
+        }
+        console.assert(board.fire(x, y) == board,
+                       {msg: 'board.fire() failed.'});
+      }
+    }
+
+    for (let i = 1; i < 4; i++) {
+      board = Board.random(i);
+      console.assert(board.cells.every(v => (v == 0)),
+                     {msg: 'board.cells not initialized.'});
+      console.assert(!board.won,
+                     {msg: 'board unexpectedly won.'});
+      console.assert(board.shotCount == 0,
+                     {msg: 'board.shotCount is incorrect.'});
+    }
+
+    board = Board.random(4);
+    console.assert(board.cells.every(v => ((v == 0) || (v == 1))),
+                   {msg: 'board.cells not initialized.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(board.shotCount == 0,
+                   {msg: 'board.shotCount is incorrect.'});
+    console.assert(board.cells.filter(v => (v == 1)).length == 2,
+                   {msg: 'board.cells not initialized.'});
+
+    board = Board.random(10);
+    console.assert(board.cells.every(v => ((v == 0) || (v == 1))),
+                   {msg: 'board.cells not initialized.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(board.shotCount == 0,
+                   {msg: 'board.shotCount is incorrect.'});
+    console.assert(board.cells.filter(v => (v == 1)).length == 14,
+                   {msg: 'board.cells not initialized.'});
+  }
+}
+Board.test();
+
+class Display {
+  constructor(parent, score) {
+    if (!(parent instanceof Node)) {
+      throw new TypeError('Bad DOM parent.');
+    }
+    this.parent = parent;
+
+    if (!(score instanceof Node)) {
+      throw new TypeError('Bad DOM parent.');
+    }
+    this.score = score;
+  }
+  draw(board) {
+    let count = board.shotCount,
+        plural = '';
+    if (count > 1) {
+      plural = 's';
+    }
+    this.score.innerHTML = `Fired ${count} shot${plural}`;
+  }
+}
+
+class ASCIIDisplay extends Display {
+  constructor(parent, score, hit = 'X', miss = 'O') {
+    super(parent, score);
+    this.hit = hit;
+    this.miss = miss;
+  }
+  draw(board) {
+    super.draw(board);
+    let target = this.parent.querySelector('pre');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('pre');
+      this.parent.appendChild(target);
+    }
+
+    let rows = [];
+    for (let y = 0; y < board.size; y++) {
+      let row = [];
+      for (let x = 0; x < board.size; x++) {
+        if (board.isHit(x, y)) {
+          row.push(this.hit);
+        }
+        else if (board.isMiss(x, y)) {
+          row.push(this.miss);
+        }
+        else {
+          row.push(' ');
+        }
+      }
+      rows.push(row.join(''));
+    }
+    target.textContent = rows.join('\n');
+  }
+}
+
+class CanvasDisplay extends Display {
+  constructor(parent, score, hitColor = '#FF0000', missColor = '#FFFF00', backgroundColor = '#0000FF') {
+    super(parent, score);
+    this.hitColor = hitColor;
+    this.missColor = missColor;
+    this.backgroundColor = backgroundColor;
+  }
+  draw(board) {
+    super.draw(board);
+    let target = this.parent.querySelector('canvas');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('canvas');
+      this.parent.appendChild(target);
+    }
+    let width = board.size * SCALE,
+        height = board.size * SCALE;
+    if ((target.width != width) || (target.height != height)) {
+      target.width = width;
+      target.height = height;
+    }
+
+    let context = target.getContext('2d');
+    context.fillStyle = this.backgroundColor;
+    context.fillRect(0, 0, width, height);
+    for (let y = 0; y < board.size; y++) {
+      for (let x = 0; x < board.size; x++) {
+        if (board.isHit(x, y)) {
+          context.fillStyle = this.hitColor;
+          context.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+        }
+        else if (board.isMiss(x, y)) {
+          context.fillStyle = this.missColor;
+          context.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+        }
+      }
+    }
+
+    // Draw grid lines
+    context.lineWidth = 1;
+    context.strokeStyle = '#000000';
+    context.beginPath();
+    context.moveTo(1, 1);
+    context.lineTo(width - 1, 1);
+    context.lineTo(width - 1, height - 1);
+    context.lineTo(1, height - 1);
+    context.closePath();
+    context.stroke();
+    for (let i = 1; i < board.size; i++) {
+      context.beginPath();
+      context.moveTo(i * SCALE, 0);
+      context.lineTo(i * SCALE, height);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(0, i * SCALE);
+      context.lineTo(width, i * SCALE);
+      context.stroke();
+    }
+  }
+}
+
+class TableDisplay extends Display {
+  draw(board) {
+    super.draw(board);
+    let target = this.parent.querySelector('table');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('table');
+      this.parent.appendChild(target);
+    }
+
+    let rows = [];
+    for (let y = 0; y < board.size; y++) {
+      let row = [];
+      row.push('  <tr>');
+      for (let x = 0; x < board.size; x++) {
+        let cell = '    ';
+        if (board.isHit(x, y)) {
+          cell += '<td class="hit">';
+        }
+        else if (board.isMiss(x, y)) {
+          cell += '<td class="miss">';
+        }
+        else {
+          cell += '<td>';
+        }
+        cell += '</td>';
+        row.push(cell);
+      }
+      row.push('  </tr>');
+      rows.push(row.join('\n'));
+    }
+    target.innerHTML = rows.join('\n');
+  }
+}
+
+let output = document.querySelector('#board');
+let score = document.querySelector('#score');
+//let display = new ASCIIDisplay(output, score);
+let display = new CanvasDisplay(output, score);
+//let display = new TableDisplay(output, score);
+
+let board = null;
+function newBoard(event) {
+  board = Board.random(10);
+  display.draw(board);
+}
+
+output.addEventListener('click', (event) => {
+  let box = output.getBoundingClientRect(),
+      x = Math.min(Math.floor((event.clientX - box.left) / SCALE), board.size - 1),
+      y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.size - 1);
+  if (x < 0) {
+    x = 0;
+  }
+  if (y < 0) {
+    y = 0;
+  }
+  board = board.fire(x, y);
+  display.draw(board);
+  if (board.won) {
+    alert('You won!');
+  }
+});
+document.querySelector('#new').addEventListener('click', newBoard);
+
+newBoard();
+</script>
+</body>
+
+</html>
