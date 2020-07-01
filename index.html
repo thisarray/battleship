@@ -418,14 +418,14 @@ class CanvasDisplay extends Display {
   }
   draw(board) {
     super.draw(board);
-    let target = this.parent.querySelector('canvas');
+    let target = this.parent.querySelector('canvas'),
+        width = board.size * SCALE,
+        height = board.size * SCALE;
     if (target == null) {
       this.parent.innerHTML = '';
       target = document.createElement('canvas');
       this.parent.appendChild(target);
     }
-    let width = board.size * SCALE,
-        height = board.size * SCALE;
     if ((target.width != width) || (target.height != height)) {
       target.width = width;
       target.height = height;
