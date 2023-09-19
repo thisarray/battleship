@@ -61,56 +61,97 @@ td {
 
 <script>
 /*
- * Size in pixels of each cell.
+ * Integer size in pixels of each cell.
  */
 const SCALE = 40;
 
-/*
- * Each cell in the board is in 1 of 4 states:
- * 0: empty
- * 1: occupied by a ship but no shot fired at the cell
- * 2: miss (not occupied by a ship but shot fired at the cell)
- * 3: hit (occupied by a ship and shot fired at the cell)
- *
- * The state is represented by an integer.
- * Whether a ship occupies a cell can be determined by (value % 2) == 1.
- * Whether a shot has been fired at a cell can be determined by value > 1.
- */
 class Board {
+  /*
+   * Each cell in the board is in 1 of 4 states represented by an integer.
+   */
+  static EMPTY = 0;
+
+  // Occupied by a ship but no shot fired at the cell
+  static SHIP = 1;
+
+  // Miss (not occupied by a ship but shot fired at the cell)
+  static MISS = 2;
+
+  // Hit (occupied by a ship and shot fired at the cell)
+  static HIT = 3;
+
   constructor(size) {
+    if (typeof size !== 'number') {
+      throw new TypeError('size must be a number.');
+    }
+
     this.size = Math.max(1, size);
-    this.cells = new Array(this.size * this.size).fill(0);
+    this.cells = new Array(this.size * this.size).fill(Board.EMPTY);
     this.won = false;
   }
-  coordinatesToIndex(x, y) {
+
+  /*
+   * Return the index for coordinates (x, y).
+   */
+  _coordinatesToIndex(x, y) {
     return x + (y * this.size);
   }
+
+  /*
+   * Return the integer number of shots fired so far.
+   */
   get shotCount() {
-    return this.cells.filter(v => (v > 1)).length;
+    return this.cells.filter(v => ((v === Board.MISS) || (v === Board.HIT))).length;
   }
 
-  isHelper(x, y, value) {
+  _isHelper(x, y, value) {
+    if (typeof x !== 'number') {
+      throw new TypeError('x must be a number.');
+    }
+    if (typeof y !== 'number') {
+      throw new TypeError('y must be a number.');
+    }
+
     if (x < 0) {
       return false;
     }
     if (y < 0) {
       return false;
     }
-    if (x >= this.size) {
+    if (this.size <= x) {
       return false;
     }
-    if (y >= this.size) {
+    if (this.size <= y) {
       return false;
     }
-    return (this.cells[this.coordinatesToIndex(x, y)] == value);
+    return (this.cells[this._coordinatesToIndex(x, y)] === value);
   }
+
+  /*
+   * Return true if the coordinates (x, y) is a hit.
+   */
   isHit(x, y) {
-    return this.isHelper(x, y, 3);
+    return this._isHelper(x, y, Board.HIT);
   }
+
+  /*
+   * Return true if the coordinates (x, y) is a miss.
+   */
   isMiss(x, y) {
-    return this.isHelper(x, y, 2);
+    return this._isHelper(x, y, Board.MISS);
   }
+
+  /*
+   * Return a new Board instance that reflects firing at the coordinates (x, y).
+   */
   fire(x, y) {
+    if (typeof x !== 'number') {
+      throw new TypeError('x must be a number.');
+    }
+    if (typeof y !== 'number') {
+      throw new TypeError('y must be a number.');
+    }
+
     if (this.won) {
       return this;
     }
@@ -120,48 +161,58 @@ class Board {
     if (y < 0) {
       return this;
     }
-    if (x >= this.size) {
+    if (this.size <= x) {
       return this;
     }
-    if (y >= this.size) {
+    if (this.size <= y) {
       return this;
     }
 
     let board = new Board(this.size),
-        index = this.coordinatesToIndex(x, y),
+        index = this._coordinatesToIndex(x, y),
         value = this.cells[index];
-    if (value > 1) {
+    if ((value === Board.MISS) || (value === Board.HIT)) {
       // If this cell has already been fired upon, then do nothing
       return this;
     }
 
     board.cells = this.cells.slice();
-    board.cells[index] = value + 2;
+    if (value === Board.EMPTY) {
+      board.cells[index] = Board.MISS;
+    }
+    if (value === Board.SHIP) {
+      board.cells[index] = Board.HIT;
+    }
 
     // Check if all ships have been sunk
-    board.won = board.cells.every(v => (v != 1))
+    board.won = board.cells.every(v => (v !== Board.SHIP));
 
     return board;
   }
 
   /*
-   * Return a size x size Board with randomly placed ships.
+   * Return a new size x size Board instance with randomly placed ships.
    *
    * Limit the longest ship to half of size so it can fit twice.
    * Otherwise, simply firing down the center would find the ship making the game too easy.
    */
   static random(size) {
+    if (typeof size !== 'number') {
+      throw new TypeError('size must be a number.');
+    }
+
     let board = new Board(size),
-        longestShip = Math.floor(size / 2);
+        longestShip = Math.floor(size / 2),
+        placed;
     for (let length = 2; length <= longestShip; length++) {
-      let placed = false;
+      placed = false;
       while (!placed) {
-        let horizontal = (Math.random() < 0.5),
+        let horizontalP = (Math.random() < 0.5),
             x = Math.floor(Math.random() * size),
             y = Math.floor(Math.random() * size),
             step = 1,
-            total = 0;
-        if (horizontal) {
+            emptyP = true;
+        if (horizontalP) {
           // Place the current ship horizontally
           if ((x + length) > size) {
             // If there is not enough room going right, then go left
@@ -169,12 +220,15 @@ class Board {
             step = -1;
           }
           for (let i = 0; i < length; i++) {
-            total += board.cells[board.coordinatesToIndex(x + (i * step), y)];
+            if (!board._isHelper(x + (i * step), y, Board.EMPTY)) {
+              emptyP = false;
+              break;
+            }
           }
-          if (total <= 0) {
+          if (emptyP) {
             // If the ship does not collide with another
             for (let i = 0; i < length; i++) {
-              board.cells[board.coordinatesToIndex(x + (i * step), y)] = 1;
+              board.cells[board._coordinatesToIndex(x + (i * step), y)] = Board.SHIP;
             }
             placed = true;
           }
@@ -187,18 +241,22 @@ class Board {
             step = -1;
           }
           for (let i = 0; i < length; i++) {
-            total += board.cells[board.coordinatesToIndex(x, y + (i * step))];
+            if (!board._isHelper(x, y + (i * step), Board.EMPTY)) {
+              emptyP = false;
+              break;
+            }
           }
-          if (total <= 0) {
+          if (emptyP) {
             // If the ship does not collide with another
             for (let i = 0; i < length; i++) {
-              board.cells[board.coordinatesToIndex(x, y + (i * step))] = 1;
+              board.cells[board._coordinatesToIndex(x, y + (i * step))] = Board.SHIP;
             }
             placed = true;
           }
         }
       }
     }
+
     return board;
   }
 
@@ -207,32 +265,32 @@ class Board {
    */
   static test() {
     let board = new Board(10);
-    console.assert(board.cells.every(v => (v == 0)),
-                   {msg: 'board.cells not initialized.'});
+    console.assert(board.cells.every(v => (v === Board.EMPTY)),
+                   {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
-    console.assert(board.shotCount == 0,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(board.shotCount === 0,
                    {msg: 'board.shotCount is incorrect.'});
-    board.cells[11] = 1;
-    board.cells[55] = 2;
-    board.cells[99] = 3;
-    console.assert(board.coordinatesToIndex(1, 1) == 11,
-                   {msg: 'board.coordinatesToIndex() failed.'});
-    console.assert(board.coordinatesToIndex(5, 5) == 55,
-                   {msg: 'board.coordinatesToIndex() failed.'});
-    console.assert(board.coordinatesToIndex(9, 9) == 99,
-                   {msg: 'board.coordinatesToIndex() failed.'});
-    console.assert(board.shotCount == 2,
+    board.cells[11] = Board.SHIP;
+    board.cells[55] = Board.MISS;
+    board.cells[99] = Board.HIT;
+    console.assert(board._coordinatesToIndex(1, 1) === 11,
+                   {msg: 'board._coordinatesToIndex() failed.'});
+    console.assert(board._coordinatesToIndex(5, 5) === 55,
+                   {msg: 'board._coordinatesToIndex() failed.'});
+    console.assert(board._coordinatesToIndex(9, 9) === 99,
+                   {msg: 'board._coordinatesToIndex() failed.'});
+    console.assert(board.shotCount === 2,
                    {msg: 'board.shotCount is incorrect.'});
     for (let x = -1; x <= board.size; x++) {
       for (let y = -1; y <= board.size; y++) {
-        if ((x == 5) && (y == 5)) {
+        if ((x === 5) && (y === 5)) {
           console.assert(!board.isHit(x, y),
                          {msg: 'board.isHit() failed.'});
           console.assert(board.isMiss(x, y),
                          {msg: 'board.isMiss() failed.'});
         }
-        else if ((x == 9) && (y == 9)) {
+        else if ((x === 9) && (y === 9)) {
           console.assert(board.isHit(x, y),
                          {msg: 'board.isHit() failed.'});
           console.assert(!board.isMiss(x, y),
@@ -243,36 +301,36 @@ class Board {
                          {msg: 'board.isHit() failed.'});
           console.assert(!board.isMiss(x, y),
                          {msg: 'board.isMiss() failed.'});
-          if ((x == -1) || (x == board.size) || (y == -1) || (y == board.size)) {
-            console.assert(board.fire(x, y) == board,
+          if ((x < 0) || (board.size <= x) || (y < 0) || (board.size <= y)) {
+            console.assert(board.fire(x, y) === board,
                            {msg: 'board.fire() failed.'});
           }
         }
       }
     }
 
-    console.assert(board.fire(5, 5) == board,
+    console.assert(board.fire(5, 5) === board,
                    {msg: 'board.fire() failed.'});
-    console.assert(board.fire(9, 9) == board,
+    console.assert(board.fire(9, 9) === board,
                    {msg: 'board.fire() failed.'});
-    console.assert(board.cells[24] == 0,
+    console.assert(board.cells[24] === Board.EMPTY,
                    {msg: 'board.fire() failed.'});
     board = board.fire(4, 2);
-    console.assert(board.cells[24] == 2,
+    console.assert(board.cells[24] === Board.MISS,
                    {msg: 'board.fire() failed.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
-    console.assert(board.shotCount == 3,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(board.shotCount === 3,
                    {msg: 'board.shotCount is incorrect.'});
     for (let x = -1; x <= board.size; x++) {
       for (let y = -1; y <= board.size; y++) {
-        if (((x == 4) && (y == 2)) || ((x == 5) && (y == 5))) {
+        if (((x === 4) && (y === 2)) || ((x === 5) && (y === 5))) {
           console.assert(!board.isHit(x, y),
                          {msg: 'board.isHit() failed.'});
           console.assert(board.isMiss(x, y),
                          {msg: 'board.isMiss() failed.'});
         }
-        else if ((x == 9) && (y == 9)) {
+        else if ((x === 9) && (y === 9)) {
           console.assert(board.isHit(x, y),
                          {msg: 'board.isHit() failed.'});
           console.assert(!board.isMiss(x, y),
@@ -288,21 +346,21 @@ class Board {
     }
 
     board = board.fire(1, 1);
-    console.assert(board.cells[11] == 3,
+    console.assert(board.cells[11] === Board.HIT,
                    {msg: 'board.fire() failed.'});
     console.assert(board.won,
-                   {msg: 'board unexpectedly not won.'});
-    console.assert(board.shotCount == 4,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(board.shotCount === 4,
                    {msg: 'board.shotCount is incorrect.'});
     for (let x = -1; x <= board.size; x++) {
       for (let y = -1; y <= board.size; y++) {
-        if (((x == 4) && (y == 2)) || ((x == 5) && (y == 5))) {
+        if (((x === 4) && (y === 2)) || ((x === 5) && (y === 5))) {
           console.assert(!board.isHit(x, y),
                          {msg: 'board.isHit() failed.'});
           console.assert(board.isMiss(x, y),
                          {msg: 'board.isMiss() failed.'});
         }
-        else if (((x == 1) && (y == 1)) || ((x == 9) && (y == 9))) {
+        else if (((x === 1) && (y === 1)) || ((x === 9) && (y === 9))) {
           console.assert(board.isHit(x, y),
                          {msg: 'board.isHit() failed.'});
           console.assert(!board.isMiss(x, y),
@@ -314,40 +372,40 @@ class Board {
           console.assert(!board.isMiss(x, y),
                          {msg: 'board.isMiss() failed.'});
         }
-        console.assert(board.fire(x, y) == board,
+        console.assert(board.fire(x, y) === board,
                        {msg: 'board.fire() failed.'});
       }
     }
 
     for (let i = 1; i < 4; i++) {
       board = Board.random(i);
-      console.assert(board.cells.every(v => (v == 0)),
+      console.assert(board.cells.every(v => (v === Board.EMPTY)),
                      {msg: 'board.cells not initialized.'});
       console.assert(!board.won,
-                     {msg: 'board unexpectedly won.'});
-      console.assert(board.shotCount == 0,
+                     {msg: 'board.won is incorrect.'});
+      console.assert(board.shotCount === 0,
                      {msg: 'board.shotCount is incorrect.'});
     }
 
     board = Board.random(4);
-    console.assert(board.cells.every(v => ((v == 0) || (v == 1))),
-                   {msg: 'board.cells not initialized.'});
+    console.assert(board.cells.every(v => ((v === Board.EMPTY) || (v === Board.SHIP))),
+                   {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
-    console.assert(board.shotCount == 0,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(board.shotCount === 0,
                    {msg: 'board.shotCount is incorrect.'});
-    console.assert(board.cells.filter(v => (v == 1)).length == 2,
-                   {msg: 'board.cells not initialized.'});
+    console.assert(board.cells.filter(v => (v === Board.SHIP)).length === 2,
+                   {msg: 'board.cells is incorrect.'});
 
     board = Board.random(10);
-    console.assert(board.cells.every(v => ((v == 0) || (v == 1))),
-                   {msg: 'board.cells not initialized.'});
+    console.assert(board.cells.every(v => ((v === Board.EMPTY) || (v === Board.SHIP))),
+                   {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
-    console.assert(board.shotCount == 0,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(board.shotCount === 0,
                    {msg: 'board.shotCount is incorrect.'});
-    console.assert(board.cells.filter(v => (v == 1)).length == 14,
-                   {msg: 'board.cells not initialized.'});
+    console.assert(board.cells.filter(v => (v === Board.SHIP)).length === 14,
+                   {msg: 'board.cells is incorrect.'});
   }
 }
 Board.test();
@@ -364,13 +422,14 @@ class Display {
     }
     this.score = score;
   }
+
   draw(board) {
     let count = board.shotCount,
         plural = '';
     if (count > 1) {
       plural = 's';
     }
-    this.score.innerHTML = `Fired ${count} shot${plural}`;
+    this.score.textContent = `Fired ${count} shot${plural}`;
   }
 }
 
@@ -505,11 +564,11 @@ class TableDisplay extends Display {
   }
 }
 
-let output = document.querySelector('#board');
-let score = document.querySelector('#score');
-//let display = new ASCIIDisplay(output, score);
-let display = new CanvasDisplay(output, score);
-//let display = new TableDisplay(output, score);
+const OUTPUT = document.querySelector('#board');
+const SCORE = document.querySelector('#score');
+//let display = new ASCIIDisplay(OUTPUT, SCORE);
+let display = new CanvasDisplay(OUTPUT, SCORE);
+//let display = new TableDisplay(OUTPUT, SCORE);
 
 let board = null;
 function newBoard(event) {
@@ -517,8 +576,8 @@ function newBoard(event) {
   display.draw(board);
 }
 
-output.addEventListener('click', (event) => {
-  let box = output.getBoundingClientRect(),
+OUTPUT.addEventListener('click', (event) => {
+  let box = event.target.getBoundingClientRect(),
       x = Math.min(Math.floor((event.clientX - box.left) / SCALE), board.size - 1),
       y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.size - 1);
   if (x < 0) {
