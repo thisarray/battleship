@@ -12,8 +12,7 @@ body {
 }
 output {
   display: block;
-  margin-bottom: 1em;
-  margin-left: 1em;
+  margin: 1em 0;
 }
 pre {
   background-color: blue;
@@ -25,18 +24,15 @@ pre {
 }
 table {
   border-collapse: collapse;
-  font-size: 36px;
-  line-height: 36px;
   margin: 0;
   padding: 0;
-  text-align: center;
 }
 td {
   background-color: blue;
   border: 1px solid black;
-  color: black;
-  height: 38px;
-  width: 38px;
+  /* height and width so resulting cell is 40px by 40px */
+  height: 37px;
+  width: 37px;
 }
 .hit {
   background-color: red;
@@ -65,6 +61,9 @@ td {
  */
 const SCALE = 40;
 
+/*
+ * An immutable representation of the current state.
+ */
 class Board {
   /*
    * Each cell in the board is in 1 of 4 states represented by an integer.
@@ -439,6 +438,7 @@ class ASCIIDisplay extends Display {
     this.hit = hit;
     this.miss = miss;
   }
+
   draw(board) {
     super.draw(board);
     let target = this.parent.querySelector('pre');
@@ -469,17 +469,19 @@ class ASCIIDisplay extends Display {
 }
 
 class CanvasDisplay extends Display {
-  constructor(parent, score, hitColor = '#FF0000', missColor = '#FFFF00', backgroundColor = '#0000FF') {
+  constructor(parent, score, hitColor = 'red', missColor = 'yellow', backgroundColor = 'blue') {
     super(parent, score);
     this.hitColor = hitColor;
     this.missColor = missColor;
     this.backgroundColor = backgroundColor;
   }
+
   draw(board) {
     super.draw(board);
     let target = this.parent.querySelector('canvas'),
         width = board.size * SCALE,
-        height = board.size * SCALE;
+        height = board.size * SCALE,
+        context;
     if (target == null) {
       this.parent.innerHTML = '';
       target = document.createElement('canvas');
@@ -490,7 +492,7 @@ class CanvasDisplay extends Display {
       target.height = height;
     }
 
-    let context = target.getContext('2d');
+    context = target.getContext('2d');
     context.fillStyle = this.backgroundColor;
     context.fillRect(0, 0, width, height);
     for (let y = 0; y < board.size; y++) {
@@ -508,7 +510,8 @@ class CanvasDisplay extends Display {
 
     // Draw grid lines
     context.lineWidth = 1;
-    context.strokeStyle = '#000000';
+    context.strokeStyle = 'black';
+    // Outer border
     context.beginPath();
     context.moveTo(1, 1);
     context.lineTo(width - 1, 1);
@@ -517,10 +520,12 @@ class CanvasDisplay extends Display {
     context.closePath();
     context.stroke();
     for (let i = 1; i < board.size; i++) {
+      // Vertical lines
       context.beginPath();
       context.moveTo(i * SCALE, 0);
       context.lineTo(i * SCALE, height);
       context.stroke();
+      // Horizontal lines
       context.beginPath();
       context.moveTo(0, i * SCALE);
       context.lineTo(width, i * SCALE);
@@ -539,36 +544,30 @@ class TableDisplay extends Display {
       this.parent.appendChild(target);
     }
 
-    let rows = [];
+    target.innerHTML = '';
     for (let y = 0; y < board.size; y++) {
-      let row = [];
-      row.push('  <tr>');
+      let row = document.createElement('tr');
       for (let x = 0; x < board.size; x++) {
-        let cell = '    ';
+        let cell = document.createElement('td');
+        cell.appendChild(document.createTextNode('    '));
         if (board.isHit(x, y)) {
-          cell += '<td class="hit">';
+          cell.classList.add('hit');
         }
         else if (board.isMiss(x, y)) {
-          cell += '<td class="miss">';
+          cell.classList.add('miss');
         }
-        else {
-          cell += '<td>';
-        }
-        cell += '</td>';
-        row.push(cell);
+        row.appendChild(cell);
       }
-      row.push('  </tr>');
-      rows.push(row.join('\n'));
+      target.appendChild(row);
     }
-    target.innerHTML = rows.join('\n');
   }
 }
 
 const OUTPUT = document.querySelector('#board');
 const SCORE = document.querySelector('#score');
 //let display = new ASCIIDisplay(OUTPUT, SCORE);
-let display = new CanvasDisplay(OUTPUT, SCORE);
-//let display = new TableDisplay(OUTPUT, SCORE);
+//let display = new CanvasDisplay(OUTPUT, SCORE);
+let display = new TableDisplay(OUTPUT, SCORE);
 
 let board = null;
 function newBoard(event) {
@@ -577,7 +576,8 @@ function newBoard(event) {
 }
 
 OUTPUT.addEventListener('click', (event) => {
-  let box = event.target.getBoundingClientRect(),
+  // Use OUTPUT because event.target may be a child of OUTPUT
+  let box = OUTPUT.getBoundingClientRect(),
       x = Math.min(Math.floor((event.clientX - box.left) / SCALE), board.size - 1),
       y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.size - 1);
   if (x < 0) {
@@ -586,6 +586,7 @@ OUTPUT.addEventListener('click', (event) => {
   if (y < 0) {
     y = 0;
   }
+
   board = board.fire(x, y);
   display.draw(board);
   if (board.won) {
