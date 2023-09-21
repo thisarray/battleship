@@ -22,6 +22,16 @@ pre {
   line-height: 40px;
   text-transform: full-width;
 }
+article {
+  display: grid;
+  grid-auto-rows: 40px;
+  margin: 0;
+  padding: 0;
+}
+section {
+  background-color: blue;
+  border: 1px solid black;
+}
 table {
   border-collapse: collapse;
   margin: 0;
@@ -127,21 +137,21 @@ class Board {
   }
 
   /*
-   * Return true if the coordinates (x, y) is a hit.
+   * Return true if the cell at coordinates (x, y) is a hit.
    */
   isHit(x, y) {
     return this._isHelper(x, y, Board.HIT);
   }
 
   /*
-   * Return true if the coordinates (x, y) is a miss.
+   * Return true if the cell at coordinates (x, y) is a miss.
    */
   isMiss(x, y) {
     return this._isHelper(x, y, Board.MISS);
   }
 
   /*
-   * Return a new Board instance that reflects firing at the coordinates (x, y).
+   * Return a new Board instance that reflects firing at the cell at coordinates (x, y).
    */
   fire(x, y) {
     if (typeof x !== 'number') {
@@ -379,7 +389,7 @@ class Board {
     for (let i = 1; i < 4; i++) {
       board = Board.random(i);
       console.assert(board.cells.every(v => (v === Board.EMPTY)),
-                     {msg: 'board.cells not initialized.'});
+                     {msg: 'board.cells is incorrect.'});
       console.assert(!board.won,
                      {msg: 'board.won is incorrect.'});
       console.assert(board.shotCount === 0,
@@ -534,6 +544,34 @@ class CanvasDisplay extends Display {
   }
 }
 
+class GridDisplay extends Display {
+  draw(board) {
+    super.draw(board);
+    let target = this.parent.querySelector('article');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('article');
+      this.parent.appendChild(target);
+    }
+
+    target.style.gridTemplateColumns = `${ SCALE }px `.repeat(board.size).trim();
+    target.innerHTML = '';
+    for (let y = 0; y < board.size; y++) {
+      for (let x = 0; x < board.size; x++) {
+        let cell = document.createElement('section');
+        cell.appendChild(document.createTextNode('    '));
+        if (board.isHit(x, y)) {
+          cell.classList.add('hit');
+        }
+        else if (board.isMiss(x, y)) {
+          cell.classList.add('miss');
+        }
+        target.appendChild(cell);
+      }
+    }
+  }
+}
+
 class TableDisplay extends Display {
   draw(board) {
     super.draw(board);
@@ -567,7 +605,8 @@ const OUTPUT = document.querySelector('#board');
 const SCORE = document.querySelector('#score');
 //let display = new ASCIIDisplay(OUTPUT, SCORE);
 //let display = new CanvasDisplay(OUTPUT, SCORE);
-let display = new TableDisplay(OUTPUT, SCORE);
+let display = new GridDisplay(OUTPUT, SCORE);
+//let display = new TableDisplay(OUTPUT, SCORE);
 
 let board = null;
 function newBoard(event) {
