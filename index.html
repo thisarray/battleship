@@ -443,10 +443,11 @@ class Display {
 }
 
 class ASCIIDisplay extends Display {
-  constructor(parent, score, hit = 'X', miss = 'O') {
+  constructor(parent, score, hit = 'X', miss = 'O', unknown = ' ') {
     super(parent, score);
     this.hit = hit;
     this.miss = miss;
+    this.unknown = unknown;
   }
 
   draw(board) {
@@ -469,7 +470,7 @@ class ASCIIDisplay extends Display {
           row.push(this.miss);
         }
         else {
-          row.push(' ');
+          row.push(this.unknown);
         }
       }
       rows.push(row.join(''));
@@ -497,7 +498,7 @@ class CanvasDisplay extends Display {
       target = document.createElement('canvas');
       this.parent.appendChild(target);
     }
-    if ((target.width != width) || (target.height != height)) {
+    if ((target.width !== width) || (target.height !== height)) {
       target.width = width;
       target.height = height;
     }
@@ -604,8 +605,8 @@ class TableDisplay extends Display {
 const OUTPUT = document.querySelector('#board');
 const SCORE = document.querySelector('#score');
 //let display = new ASCIIDisplay(OUTPUT, SCORE);
-//let display = new CanvasDisplay(OUTPUT, SCORE);
-let display = new GridDisplay(OUTPUT, SCORE);
+let display = new CanvasDisplay(OUTPUT, SCORE);
+//let display = new GridDisplay(OUTPUT, SCORE);
 //let display = new TableDisplay(OUTPUT, SCORE);
 
 let board = null;
