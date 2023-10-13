@@ -107,7 +107,7 @@ class Board {
   }
 
   /*
-   * Return the integer number of shots fired so far.
+   * Return the integer count of shots fired so far.
    */
   get shotCount() {
     return this.cells.filter(v => ((v === Board.MISS) || (v === Board.HIT))).length;
