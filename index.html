@@ -206,10 +206,6 @@ class Board {
    * Otherwise, simply firing down the center would find the ship making the game too easy.
    */
   static random(size) {
-    if (typeof size !== 'number') {
-      throw new TypeError('size must be a number.');
-    }
-
     let board = new Board(size),
         longestShip = Math.floor(size / 2),
         placed;
